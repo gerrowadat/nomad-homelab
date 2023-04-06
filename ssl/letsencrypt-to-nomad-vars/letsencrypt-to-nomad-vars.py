@@ -106,7 +106,8 @@ def main(argv):
         existing_var = n.variables[nomad_var]
     except nomad.api.exceptions.URLNotAuthorizedNomadException as e:
         logging.error('Nomad said: %s' % (str(e)))
-        logging.error('Set NOMAD_TOKEN to a valid token able to set variables.')
+        logging.error(
+            'Set NOMAD_TOKEN to a valid token able to set variables.')
         return
     except KeyError:
         logging.info('%s is not a nomad variable, proceeding...' % (nomad_var))
