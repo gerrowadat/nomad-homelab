@@ -34,14 +34,14 @@ If you're me, this command line looks like:
 python3 letsencrypt-to-nomad-vers.py --export_cert=mylovelycert.mydomain.tld
 ```
 
-This will ideally then grab the cert form your LE direcrory and put it into *ssl_certs/mylovelycert_mydomain_tld* (nomad doesn't like periods in variable names) -- variables are actually a list of key/value pairs, so it creates 'privkey' and 'chain' keys, containing what you mght expect.
+This will ideally then grab the cert from your LE directory and put it into the nomad variable *ssl_certs/mylovelycert_mydomain_tld* (nomad doesn't like periods in variable names) -- variables are actually a list of key/value pairs, so it creates 'privkey' and 'chain' keys, containing what you mght expect.
 
 Congratulations, you've now got another copy of your private key out there somewhere.
 
-Giving Jobs Access to the Certs
+Giving Jobs Access to Certs
 ===============================
 
-By default no jobs have access to the certs -- unless you specify *--nomad_var_base=nomad/jobs/<myjob>* to the above script (jo have access to any vars inside that path by default). 
+By default no jobs have access to the certs -- unless you specify *--nomad_var_base=nomad/jobs/myjob* to the above script (jobs have access to any vars inside that path by default). 
 
 Otherwise, you have to add an acl policy to nomad to give a job access to this cert explicitly. There's a script here to do that if you don't care much about the details. Otherwise there's a snippet of HCL in [ssl-cert-access-policy.acl.hcl](ssl-cert-access-policy.acl.hcl) and a sample command line that you can squirrel away somewhere in your future plans for gitops or whatever.
 
@@ -56,10 +56,9 @@ This can be run without access to your local cert copies, it writes and inserts 
 Actually using Certificates
 ===========================
 
-The easiest way of using these variables so the most kinds of jobs interact with them is to use a template inside the secrets
-directory of the alloc.
+The easiest way of using these variables is to use a template inside the secrets directory of the alloc.
 
-Short version of thow to do this is to insert something like this inside the *task* stanza of your job definition:
+Short version of how to do this is to insert something like this inside the *task* stanza of your job definition:
 
 ```
    template {
@@ -76,6 +75,8 @@ Short version of thow to do this is to insert something like this inside the *ta
    }
 ```
 
-In the parts of your job definition that define where certificates are, look in /secrets -- the 'destination' above is from the root of the alloc.
+you can leave out change_mode and change_signal if you don't want your task HUPd whn you update the nomad variable.
+
+In the parts of your job definition that define where certificates are found, look in /secrets -- the 'destination' above is from the root of the alloc.
 
 That's it!

@@ -5,7 +5,7 @@ Standard disclaimer: these are hacks that are suitable for a homelab, where it's
 the worst thing that'll happen if you get hacked is you lose your plex library or something. Probably don't bet your company
 or employer's compute capability on this, ok? #worksonmycluster
 
-Also, I'm doing this stuff as a hobbyist - my [profile](https://log.andvari.net/about.html) suggest I'm a very impressive 
+Also, I'm doing this stuff as a hobbyist - my [profile](https://log.andvari.net/pages/about.html) suggests I'm a very impressive 
 industry class hackerman, but I actually talk to people for a living and have not written more than a few lines of code for
 money in close to 10 years.
 
