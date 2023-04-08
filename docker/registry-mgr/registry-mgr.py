@@ -97,7 +97,7 @@ def get_local_img_status(img):
 
 def main(argv):
     if len(argv) < 2:
-        logging.error('No verb specified. Try "check_files"')
+        logging.error('No verb specified. Try "list_images"')
         return
 
     if argv[1] == 'list_images':
