@@ -1,5 +1,6 @@
 import os
 import hcl
+import docker
 from enum import Enum
 from absl import app
 from dxf import DXF
@@ -126,34 +127,29 @@ def main(argv):
             logging.error('must specify --hcl_base')
             return
 
+        # Check of we have a docker registry mirror configured.
+        c = docker.Client()
+        i = c.info()
+        if 'Mirror' not in i['RegistryConfig']:
+            print('# NOTE: This host has no registry mirror configured.')
+            print('# Pulling these images will not cache them locally.')
+
         all_mentioned = get_mentioned_images_in_dir(FLAGS.hcl_base)
 
         for img in all_mentioned:
             (registry, img_name, img_version) = get_image_info(img)
             status = get_local_img_status(img)
-            if status == ImageStatus.NO_VERSION:
+            if status in (ImageStatus.NO_VERSION, ImageStatus.MISSING):
                 if registry == FLAGS.remote_docker_registry:
-                    print('# push %s to %s' % (
-                        img, FLAGS.local_docker_registry))
+                    print('# pull %s' % (img))
 
                     print('docker pull %s:%s' % (img_name, img_version))
-
-                    print('docker tag %s:%s %s/%s:%s' % (
-                        img_name,
-                        img_version,
-                        FLAGS.local_docker_registry,
-                        img_name,
-                        img_version))
-
-                    print('docker push %s/%s:%s' % (
-                        FLAGS.local_docker_registry,
-                        img_name,
-                        img_version))
 
                 elif registry == FLAGS.local_docker_registry:
                     print('# missing %s, please build and push' % (img))
                 else:
                     print('# not sure what to do about %s' % (img))
+
     else:
         print('Unknown verb: %s' % (argv[1]))
 

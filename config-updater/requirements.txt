@@ -1,0 +1,3 @@
+absl-py
+iso8601
+python-nomad >= 1.5.0
