@@ -1,12 +1,10 @@
 registry-mgr
 ============
 
-TODO: Figure out how well a local registry with --registry-mirror deals with flakey interwebs.
-
 This is a utility I use to make sure I have the right local images in my registry if I'm messing
 about with versions of things. I try to use locally-fetched images where I can in case of an internet
 outage, since a lot of the apps I run at home are only used at home. Often the only part that
-needs outside internet access is the docker fetch of a job moves.
+needs outside internet access is the docker fetch if a job moves.
 
 Get set up:
 
@@ -27,7 +25,7 @@ Current verbs are:
   - `get_missing_versions` - Spit out shell commands to get missing versions.
   - `get_missing_images` - Spit out shell commands to get missing images.
 
-my 2 use cases for this are:
 
-  - If I'm upgrading a few apps, I'll edit my local .hcl files, then run `get_missing_versions`, mainly so I don't break the jobs and because I can never remember the docker commands.
-  - If I ever have to rebuild my registry from scratch.
+If I ever have to rebuild my registry from scratch, this can be used to 'pre-warm' the registry, I guess?
+
+Also, see [//homelab/nomad/infra/docker-registry](https://github.com/gerrowadat/homelab/tree/main/nomad/infra/docker-registry) for hw I run 2 registries for mad reasons, and [where I configure the registry proxy on docker hosts](https://github.com/gerrowadat/homelab/blob/main/ansible/roles/docker/tasks/main.yml#L41)
