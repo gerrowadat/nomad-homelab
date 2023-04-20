@@ -1,5 +1,9 @@
+import os
 import enum
 import time
+import shlex
+import threading
+import subprocess
 import configparser
 from absl import app
 from absl import flags
@@ -84,6 +88,7 @@ class ResticJobRunnerStatus(enum.Enum):
     RUNNING = 3
     WAITING = 4
     FAILED = 5
+    COMPLETED = 6
 
 
 class ResticJobRunner(object):
@@ -111,6 +116,14 @@ class ResticJobRunner(object):
     def env(self):
         return self._env
 
+    @property
+    def stdout(self):
+        return self._stdout
+
+    @property
+    def stderr(self):
+        return self._stderr
+
     def _change_status(self, new_state):
         if new_state not in ResticJobRunnerStatus:
             raise ResticRunnerInternalError(
@@ -130,7 +143,7 @@ class ResticJobRunner(object):
         return ret
 
     def _build_cmd(self):
-        cmd = ['restic']
+        cmd = 'restic '
 
         # restic_extra_args
         if self._cf.restic_extra_args is not None:
@@ -148,11 +161,12 @@ class ResticJobRunner(object):
             sftp_command = 'ssh %s -i %s -s sftp' % (repo_parts[1],
                                                      self._cf.sshkeyfile)
             extra_args.extend(['-o',
-                               'sftp.command=\'%s\'' % (sftp_command)])
+                               'sftp.command="%s"' % (sftp_command)])
 
-        cmd.extend(extra_args)
+        for a in extra_args:
+            cmd += (' ' + a)
 
-        cmd.extend(['backup', self._cf.local_dir])
+        cmd += (' backup ' + self._cf.local_dir)
 
         return cmd
 
@@ -162,6 +176,48 @@ class ResticJobRunner(object):
             'RESTIC_PASSWORD': self._cf.repo_password
         }
         return env
+
+    def run(self):
+        t = threading.Thread(target=self._run_inner)
+        t.start()
+        t.join()
+
+    def _run_inner(self):
+        if self._status != ResticJobRunnerStatus.READY:
+            raise ResticRunnerInternalError('Runner is not READY')
+
+        self._change_status(ResticJobRunnerStatus.RUNNING)
+        logging.info('Executing restic command %s', self._cmd)
+        my_env = os.environ
+        my_env.update(self._env)
+        p = subprocess.Popen(shlex.split(self._cmd),
+                             env=my_env,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE,
+                             text=True)
+        self._change_status(ResticJobRunnerStatus.WAITING)
+
+        while True:
+            out, err = p.communicate()
+            if out:
+                outlines = out.split('\n')
+                for line in outlines:
+                    logging.info('[%s] [stdout] %s', self._cf.jobname, line)
+            if err:
+                errlines = err.split('\n')
+                for line in errlines:
+                    logging.info('[%s] [stderr] %s', self._cf.jobname, line)
+
+            if p.poll() is not None:
+                break
+
+        returncode = p.poll()
+        if returncode != 0:
+            logging.error('Restic process returned status %d', returncode)
+            self._change_status(ResticJobRunnerStatus.FAILED)
+        else:
+            self._change_status(ResticJobRunnerStatus.COMPLETED)
+        self._last_run = time.time()
 
 
 class ResticJob(object):
@@ -181,6 +237,13 @@ class ResticJob(object):
     @property
     def runner(self):
         return self._r
+
+    def start(self):
+        self.runner.run()
+        sleep_secs = int(self._c.interval_hrs) * 60 * 60
+        logging.info('[%s] Sleeping for %s hours...',
+                     self.jobname, self._c.interval_hrs)
+        time.sleep(sleep_secs)
 
 
 class ResticStatusServer(HTTPServer):
@@ -245,7 +308,7 @@ class ResticStatusHandler(BaseHTTPRequestHandler):
             if j.runner.last_run == 0:
                 last_run = 'never'
             else:
-                last_run = time.time(j.runner.last_run)
+                last_run = time.strftime(j.runner.last_run)
             show_link = '<a href="/show/%s">show</a>' % (j.jobname)
             content += ('<tr><td>%s</td><td>%s</td>'
                         '<td>%s</td><td>%s</td></tr>') % (j.jobname,
@@ -267,6 +330,10 @@ def main(argv):
                             restic_jobs=jobs)
     logging.info('Starting web server on %s:%s' % (FLAGS.http_server_address,
                                                    FLAGS.http_port))
+
+    for j in jobs:
+        logging.info('Kicking off %s...', j)
+        jobs[j].start()
 
     ws.serve_forever()
     ws.server_close()
