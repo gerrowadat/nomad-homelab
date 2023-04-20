@@ -8,6 +8,7 @@ import configparser
 from absl import app
 from absl import flags
 from absl import logging
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 FLAGS = flags.FLAGS
@@ -91,7 +92,7 @@ class ResticJobRunnerStatus(enum.Enum):
     COMPLETED = 6
 
 
-class ResticJobRunner(object):
+class ResticJobRunner(threading.Thread):
     def __init__(self, job_config):
         self._status = ResticJobRunnerStatus.BUILDING
         self._last_run = 0
@@ -99,6 +100,7 @@ class ResticJobRunner(object):
         self._cmd = self._build_cmd()
         self._env = self._build_env()
         self._change_status(ResticJobRunnerStatus.READY)
+        threading.Thread.__init__(self)
 
     @property
     def status(self):
@@ -178,9 +180,18 @@ class ResticJobRunner(object):
         return env
 
     def run(self):
-        t = threading.Thread(target=self._run_inner)
-        t.start()
-        t.join()
+        while True:
+            if self._status == ResticJobRunnerStatus.FAILED:
+                logging.info('Job %s previously failed, ignoring.', self._cf.jobname)
+            else:
+                if self._status == ResticJobRunnerStatus.COMPLETED:
+                    logging.info('Preparing to re-run %s...', self._cf.jobname)
+                    self._change_status(ResticJobRunnerStatus.READY)
+                self._run_inner()
+            sleep_secs = int(self._cf.interval_hrs) * 60 * 60
+            logging.info('[%s] Sleeping for %s hours...',
+                         self._cf.jobname, self._cf.interval_hrs)
+            time.sleep(sleep_secs)
 
     def _run_inner(self):
         if self._status != ResticJobRunnerStatus.READY:
@@ -238,14 +249,6 @@ class ResticJob(object):
     def runner(self):
         return self._r
 
-    def start(self):
-        self.runner.run()
-        sleep_secs = int(self._c.interval_hrs) * 60 * 60
-        logging.info('[%s] Sleeping for %s hours...',
-                     self.jobname, self._c.interval_hrs)
-        time.sleep(sleep_secs)
-
-
 class ResticStatusServer(HTTPServer):
     def __init__(self, *args, **kwargs):
         self._jobs = kwargs['restic_jobs']
@@ -282,7 +285,7 @@ class ResticStatusHandler(BaseHTTPRequestHandler):
                 bytes('Unknown job %s...' % (jobname[:20]), 'utf-8'))
         else:
             content = 'Command line: %s<br/>' % (
-                ' '.join(jobs[jobname].runner.cmd))
+                jobs[jobname].runner.cmd)
             content += 'Environment:<br/>'
             for e in jobs[jobname].runner.env:
                 if e in ['RESTIC_PASSWORD']:
@@ -308,7 +311,7 @@ class ResticStatusHandler(BaseHTTPRequestHandler):
             if j.runner.last_run == 0:
                 last_run = 'never'
             else:
-                last_run = time.strftime(j.runner.last_run)
+                last_run = str(datetime.fromtimestamp(j.runner.last_run))
             show_link = '<a href="/show/%s">show</a>' % (j.jobname)
             content += ('<tr><td>%s</td><td>%s</td>'
                         '<td>%s</td><td>%s</td></tr>') % (j.jobname,
@@ -325,16 +328,15 @@ def main(argv):
     for jobname in FLAGS.restic_jobs:
         jobs[jobname] = ResticJob(jobname)
 
+    for j in jobs:
+        logging.info('Kicking off %s...', j)
+        jobs[j].runner.start()
+
     ws = ResticStatusServer((FLAGS.http_server_address, FLAGS.http_port),
                             ResticStatusHandler,
                             restic_jobs=jobs)
     logging.info('Starting web server on %s:%s' % (FLAGS.http_server_address,
                                                    FLAGS.http_port))
-
-    for j in jobs:
-        logging.info('Kicking off %s...', j)
-        jobs[j].start()
-
     ws.serve_forever()
     ws.server_close()
 
