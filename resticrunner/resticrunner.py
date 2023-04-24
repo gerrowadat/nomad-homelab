@@ -2,6 +2,7 @@ import os
 import enum
 import time
 import shlex
+import cherrypy
 import threading
 import subprocess
 import configparser
@@ -9,7 +10,6 @@ from absl import app
 from absl import flags
 from absl import logging
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
 FLAGS = flags.FLAGS
 
@@ -20,7 +20,7 @@ flags.DEFINE_list('restic_jobs',
                   [],
                   'list of restic jobs to run')
 flags.DEFINE_string('http_server_address',
-                    'localhost',
+                    '127.0.0.1',
                     'address to run http service on')
 flags.DEFINE_integer('http_port',
                      8901,
@@ -99,8 +99,10 @@ class ResticJobRunner(threading.Thread):
         self._cf = job_config
         self._cmd = self._build_cmd()
         self._env = self._build_env()
+        self.stopping = False
         self._change_status(ResticJobRunnerStatus.READY)
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self,
+                                  name='restic_%s' % (job_config.jobname))
 
     @property
     def status(self):
@@ -181,8 +183,11 @@ class ResticJobRunner(threading.Thread):
 
     def run(self):
         while True:
+            if self.stopping:
+                return
             if self._status == ResticJobRunnerStatus.FAILED:
-                logging.info('Job %s previously failed, ignoring.', self._cf.jobname)
+                logging.info('Job %s previously failed, ignoring.',
+                             self._cf.jobname)
             else:
                 if self._status == ResticJobRunnerStatus.COMPLETED:
                     logging.info('Preparing to re-run %s...', self._cf.jobname)
@@ -191,7 +196,15 @@ class ResticJobRunner(threading.Thread):
             sleep_secs = int(self._cf.interval_hrs) * 60 * 60
             logging.info('[%s] Sleeping for %s hours...',
                          self._cf.jobname, self._cf.interval_hrs)
-            time.sleep(sleep_secs)
+            if self.stopping:
+                return
+
+            slept = 0
+            while slept < sleep_secs:
+                time.sleep(5)
+                slept += 5
+                if self.stopping:
+                    return
 
     def _run_inner(self):
         if self._status != ResticJobRunnerStatus.READY:
@@ -249,40 +262,30 @@ class ResticJob(object):
     def runner(self):
         return self._r
 
-class ResticStatusServer(HTTPServer):
-    def __init__(self, *args, **kwargs):
-        self._jobs = kwargs['restic_jobs']
-        del kwargs['restic_jobs']
-        HTTPServer.__init__(self, *args, **kwargs)
+    def stop_runner(self):
+        logging.info('Asking %s runner thread to stop' % (self.jobname))
+        self._r.stopping = True
+        self._r.join()
 
 
-class ResticStatusHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/':
-            self._serve_root()
-        elif self.path.startswith('/show'):
-            self._serve_show()
+class ResticStatusServer(object):
+    def __init__(self, jobs):
+        self._jobs = jobs
 
     def _preamble(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(bytes(('<html><head><title>Restic Job Status</title>'
-                                '</head>'), 'utf-8'))
-        self.wfile.write(bytes('<body>', 'utf-8'))
+        return ('<html><head><title>Restic Job Status</title>'
+                '</head><body>')
 
     def _closing(self):
-        self.wfile.write(bytes("</body></html>", "utf-8"))
+        return '</body></html>'
 
-    def _serve_show(self):
-        self._preamble()
-        jobs = self.server._jobs
-
-        jobname = self.path[6:]
+    @cherrypy.expose
+    def show(self, jobname=None):
+        ret = self._preamble()
+        jobs = self._jobs
 
         if jobname not in jobs:
-            self.wfile.write(
-                bytes('Unknown job %s...' % (jobname[:20]), 'utf-8'))
+            ret += 'Unknown job %s...' % (jobname[:20])
         else:
             content = 'Command line: %s<br/>' % (
                 jobs[jobname].runner.cmd)
@@ -295,32 +298,35 @@ class ResticStatusHandler(BaseHTTPRequestHandler):
                 content += ' - %s : %s<br/>' % (e, value)
 
             content = content.replace('\n', '<br/>')
-            self.wfile.write(bytes(content, 'utf-8'))
+            ret += content
 
-        self._closing()
+        ret += self._closing()
 
-    def _serve_root(self):
-        jobs = self.server._jobs
-        self._preamble()
+        return ret
+
+    @cherrypy.expose
+    def index(self):
+        ret = self._preamble()
 
         content = ('<table border=1><tr><td><b>name</b></td>'
                    '<td><b>status</b></td><td>last run</td>'
                    '<td>link</td></b></tr>')
 
-        for j in jobs.values():
+        for j in self._jobs.values():
             if j.runner.last_run == 0:
                 last_run = 'never'
             else:
                 last_run = str(datetime.fromtimestamp(j.runner.last_run))
-            show_link = '<a href="/show/%s">show</a>' % (j.jobname)
+            show_link = '<a href="/show?jobname=%s">show</a>' % (j.jobname)
             content += ('<tr><td>%s</td><td>%s</td>'
                         '<td>%s</td><td>%s</td></tr>') % (j.jobname,
                                                           j.runner.status,
                                                           last_run,
                                                           show_link)
-        self.wfile.write(bytes(content, 'utf-8'))
+        ret += content
+        ret += self._closing()
 
-        self._closing()
+        return ret
 
 
 def main(argv):
@@ -332,13 +338,20 @@ def main(argv):
         logging.info('Kicking off %s...', j)
         jobs[j].runner.start()
 
-    ws = ResticStatusServer((FLAGS.http_server_address, FLAGS.http_port),
-                            ResticStatusHandler,
-                            restic_jobs=jobs)
+    cherrypy.config.update(
+        {'server.socket_host': FLAGS.http_server_address,
+         'server.socket_port': FLAGS.http_port})
+
+    # When Cherrypy is stopping, stop our restic worker threads.
+    def _stop_restic_threads():
+        for j in jobs:
+            jobs[j].stop_runner()
+    cherrypy.engine.subscribe('stop', _stop_restic_threads)
+
     logging.info('Starting web server on %s:%s' % (FLAGS.http_server_address,
                                                    FLAGS.http_port))
-    ws.serve_forever()
-    ws.server_close()
+
+    cherrypy.quickstart(ResticStatusServer(jobs), '/')
 
 
 if __name__ == '__main__':
