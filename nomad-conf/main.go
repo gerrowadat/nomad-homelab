@@ -1,10 +1,6 @@
-/*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
-
-*/
 package main
 
-import "nomad-conf/cmd"
+import "github.com/gerrowadat/nomad-homelab/nomad-conf/cmd"
 
 func main() {
 	cmd.Execute()

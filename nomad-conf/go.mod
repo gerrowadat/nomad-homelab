@@ -1,4 +1,4 @@
-module nomad-conf
+module github.com/gerrowadat/nomad-homelab/nomad-conf
 
 go 1.21.1
 
