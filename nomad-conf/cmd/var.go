@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/gerrowadat/nomad-homelab/nomad-conf/util"
 	api "github.com/hashicorp/nomad/api"
 	"github.com/spf13/cobra"
 )
@@ -37,18 +38,14 @@ func doVar(cmd *cobra.Command, args []string) {
 	}
 
 	if args[0] == "get" {
-		n, err := NomadClient()
+		n, err := util.NomadClient(nomadServer)
 		if err != nil {
 			fmt.Println("Nomad Error:", err)
 			return
 		}
 		if len(args) == 1 {
 			// Spit out all variables
-			ls, _, err := n.Variables().List(nil)
-			if err != nil {
-				log.Fatalf("nomad Error: %v", err)
-			}
-			for _, v := range ls {
+			for _, v := range util.GetAllVariables(n) {
 				fmt.Println(v.Path)
 			}
 			return
@@ -56,25 +53,12 @@ func doVar(cmd *cobra.Command, args []string) {
 		if len(args) == 2 {
 			// Spit out a single variable
 			// Spit out as k/v if we specified a bare variable, or the raw contents if we asked for a key
-			vs := NewVarSpec(args[1])
-			v, _, err := n.Variables().Read(vs.VarName, nil)
+			vs := util.NewVarSpec(args[1])
+			v, err := util.GetVariable(n, args[1])
 			if err != nil {
-				log.Fatalf("nomad Error: %v", err)
-				return
+				log.Fatalf("error getting variable: %v", err)
 			}
-
-			if vs.IsKeyed() {
-				val, ok := v.Items[vs.KeyName]
-				if !ok {
-					log.Fatalf("Key %v not found in variable %v", vs.KeyName, vs.VarName)
-				}
-				fmt.Println(val)
-				return
-			}
-
-			for k, v := range v.Items {
-				fmt.Printf("%v = %v\n", k, v)
-			}
+			fmt.Print(util.VarToString(v, vs))
 			return
 		}
 		// If we get here we've gotten more than one argument, which is wrong
@@ -83,7 +67,7 @@ func doVar(cmd *cobra.Command, args []string) {
 	}
 
 	if args[0] == "put" {
-		n, err := NomadClient()
+		n, err := util.NomadClient(nomadServer)
 		if err != nil {
 			fmt.Println("Nomad Error:", err)
 			return
@@ -93,7 +77,7 @@ func doVar(cmd *cobra.Command, args []string) {
 			cmd.Help()
 			return
 		}
-		vs := NewVarSpec(args[1])
+		vs := util.NewVarSpec(args[1])
 		if !vs.IsKeyed() {
 			fmt.Println("Error: must specify a key when putting a variable")
 			return
@@ -106,7 +90,7 @@ func doVar(cmd *cobra.Command, args []string) {
 			log.Fatalf("error reading from stdin: %v", err)
 		}
 
-		v, _, err := n.Variables().Read(vs.VarName, nil)
+		v, err := util.GetVariable(n, vs.VarName)
 		if err != nil {
 			log.Fatalf("nomad Error: %v", err)
 		}
@@ -123,7 +107,7 @@ func doVar(cmd *cobra.Command, args []string) {
 	}
 
 	if args[0] == "create" {
-		n, err := NomadClient()
+		n, err := util.NomadClient(nomadServer)
 		if err != nil {
 			fmt.Println("Nomad Error:", err)
 			return
@@ -133,7 +117,7 @@ func doVar(cmd *cobra.Command, args []string) {
 			cmd.Help()
 			return
 		}
-		vs := NewVarSpec(args[1])
+		vs := util.NewVarSpec(args[1])
 		if !vs.IsKeyed() {
 			fmt.Println("Error: must create a key when creating a variable.")
 			return
