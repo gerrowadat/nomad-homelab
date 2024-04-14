@@ -17,6 +17,11 @@ Usage outline: (mostly not implemented):
   - nomad-conf uploadall /my/local/files.d/*.cf nomad/jobs/myjob:config // concatenate into one file.
     --only-if-newer
 
+
+  # long-running file or github integration
+  - nomad-conf sync prometheus.yml nomad/jobs/prometheus:prometheus_yml
+  - nomad-conf sync github.com/gerrowadat/homelab/monitoring/prometheus.yml nomad/jobs/prometheus:prometheus_yml
+  # Also: Some means of doing a bunch of these, or a directory.
 ```
 
 and so on.
