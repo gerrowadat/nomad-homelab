@@ -3,6 +3,7 @@ module github.com/gerrowadat/nomad-homelab/nomad-conf
 go 1.21.1
 
 require (
+	github.com/akedrou/textdiff v0.0.0-20230423230343-2ebdcebdccc1
 	github.com/hashicorp/nomad/api v0.0.0-20240412193148-1739f94e842a
 	github.com/spf13/cobra v1.8.0
 )

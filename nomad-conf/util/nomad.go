@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/akedrou/textdiff"
 	api "github.com/hashicorp/nomad/api"
 )
 
@@ -55,8 +56,7 @@ func GetAllVariables(c *api.Client) []*api.VariableMetadata {
 	return ls
 }
 
-func GetVariable(c *api.Client, path string) (*api.Variable, error) {
-	vs := NewVarSpec(path)
+func GetVariable(c *api.Client, vs *VarSpec) (*api.Variable, error) {
 	v, _, err := c.Variables().Read(vs.VarName, nil)
 	if err != nil {
 		return nil, err
@@ -78,4 +78,44 @@ func VarToString(v *api.Variable, vs *VarSpec) string {
 		ret += fmt.Sprintf("%v = %v\n", k, v)
 	}
 	return ret
+}
+
+func GetVariableDiff(c *api.Client, vs *VarSpec, new_var string) (string, error) {
+	// Return a text unified diff of the existing variable vs. candidate content.
+	// If the variable does not exist, return a diff that will create it.
+	// If the variable exists and is the same, return an empty string.
+	if !vs.IsKeyed() {
+		return "", fmt.Errorf("variable %v: must specify a key", vs.VarName)
+	}
+	v, err := GetVariable(c, vs)
+	if err != nil {
+		return "", fmt.Errorf("variable %v does not exist", vs.VarName)
+	}
+
+	if v.Items[vs.KeyName] == new_var {
+		// no change
+		return "", nil
+	}
+
+	d := textdiff.Unified("nomad", "local", v.Items[vs.KeyName], new_var)
+
+	return d, nil
+}
+
+func UploadNewVar(c *api.Client, vs *VarSpec, new_var string) error {
+	// Upload a new variable with the specified content.
+	// If the variable already exists, this will overwrite it.
+	// If the variable does not exist, this will create it.
+	if !vs.IsKeyed() {
+		return fmt.Errorf("variable %v: must specify a key", vs.VarName)
+	}
+	v, err := GetVariable(c, vs)
+	if err != nil {
+		return fmt.Errorf("variable %v does not exist", vs.VarName)
+	}
+
+	v.Items[vs.KeyName] = new_var
+
+	_, _, err = c.Variables().Update(v, nil)
+	return err
 }

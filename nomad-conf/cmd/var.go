@@ -54,7 +54,7 @@ func doVar(cmd *cobra.Command, args []string) {
 			// Spit out a single variable
 			// Spit out as k/v if we specified a bare variable, or the raw contents if we asked for a key
 			vs := util.NewVarSpec(args[1])
-			v, err := util.GetVariable(n, args[1])
+			v, err := util.GetVariable(n, vs)
 			if err != nil {
 				log.Fatalf("error getting variable: %v", err)
 			}
@@ -90,18 +90,10 @@ func doVar(cmd *cobra.Command, args []string) {
 			log.Fatalf("error reading from stdin: %v", err)
 		}
 
-		v, err := util.GetVariable(n, vs.VarName)
+		err = util.UploadNewVar(n, vs, string(bytes))
+
 		if err != nil {
-			log.Fatalf("nomad Error: %v", err)
-		}
-		_, ok := v.Items[vs.KeyName]
-		if !ok {
-			log.Fatalf("Key %v not found in variable %v", vs.KeyName, vs.VarName)
-		}
-		v.Items[vs.KeyName] = string(bytes)
-		_, _, err = n.Variables().Update(v, nil)
-		if err != nil {
-			log.Fatalf("nomad Error: %v", err)
+			log.Fatalf("error updating variable: %v", err)
 		}
 		return
 	}
