@@ -1,13 +1,10 @@
-/*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/gerrowadat/nomad-homelab/nomad-conf/util"
+	"github.com/gerrowadat/nomad-homelab/nomad-conf/nomadconf"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +26,7 @@ func doDiff(cmd *cobra.Command, args []string) {
 		cmd.Help()
 		return
 	}
-	v := util.NewVarSpec(args[1])
+	v := nomadconf.NewVarSpec(args[1])
 
 	filedata, err := os.ReadFile(args[0])
 	if err != nil {
@@ -38,14 +35,14 @@ func doDiff(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	n, err := util.NomadClient(nomadServer)
+	n, err := nomadconf.NomadClient(nomadServer)
 
 	if err != nil {
 		fmt.Println("Nomad Error:", err)
 		return
 	}
 
-	diff, err := util.GetVariableDiff(n, v, string(filedata))
+	diff, err := nomadconf.GetVariableDiff(n, v, string(filedata))
 
 	if err != nil {
 		fmt.Println("Error getting diff:", err)

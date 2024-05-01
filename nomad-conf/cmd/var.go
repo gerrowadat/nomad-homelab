@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/gerrowadat/nomad-homelab/nomad-conf/util"
+	"github.com/gerrowadat/nomad-homelab/nomad-conf/nomadconf"
 	api "github.com/hashicorp/nomad/api"
 	"github.com/spf13/cobra"
 )
@@ -38,14 +38,14 @@ func doVar(cmd *cobra.Command, args []string) {
 	}
 
 	if args[0] == "get" {
-		n, err := util.NomadClient(nomadServer)
+		n, err := nomadconf.NomadClient(nomadServer)
 		if err != nil {
 			fmt.Println("Nomad Error:", err)
 			return
 		}
 		if len(args) == 1 {
 			// Spit out all variables
-			for _, v := range util.GetAllVariables(n) {
+			for _, v := range nomadconf.GetAllVariables(n) {
 				fmt.Println(v.Path)
 			}
 			return
@@ -53,12 +53,12 @@ func doVar(cmd *cobra.Command, args []string) {
 		if len(args) == 2 {
 			// Spit out a single variable
 			// Spit out as k/v if we specified a bare variable, or the raw contents if we asked for a key
-			vs := util.NewVarSpec(args[1])
-			v, err := util.GetVariable(n, vs)
+			vs := nomadconf.NewVarSpec(args[1])
+			v, err := nomadconf.GetVariable(n, vs)
 			if err != nil {
 				log.Fatalf("error getting variable: %v", err)
 			}
-			fmt.Print(util.VarToString(v, vs))
+			fmt.Print(nomadconf.VarToString(v, vs))
 			return
 		}
 		// If we get here we've gotten more than one argument, which is wrong
@@ -67,7 +67,7 @@ func doVar(cmd *cobra.Command, args []string) {
 	}
 
 	if args[0] == "put" {
-		n, err := util.NomadClient(nomadServer)
+		n, err := nomadconf.NomadClient(nomadServer)
 		if err != nil {
 			fmt.Println("Nomad Error:", err)
 			return
@@ -77,7 +77,7 @@ func doVar(cmd *cobra.Command, args []string) {
 			cmd.Help()
 			return
 		}
-		vs := util.NewVarSpec(args[1])
+		vs := nomadconf.NewVarSpec(args[1])
 		if !vs.IsKeyed() {
 			fmt.Println("Error: must specify a key when putting a variable")
 			return
@@ -90,7 +90,7 @@ func doVar(cmd *cobra.Command, args []string) {
 			log.Fatalf("error reading from stdin: %v", err)
 		}
 
-		err = util.UploadNewVar(n, vs, string(bytes))
+		err = nomadconf.UploadNewVar(n, vs, string(bytes))
 
 		if err != nil {
 			log.Fatalf("error updating variable: %v", err)
@@ -99,7 +99,7 @@ func doVar(cmd *cobra.Command, args []string) {
 	}
 
 	if args[0] == "create" {
-		n, err := util.NomadClient(nomadServer)
+		n, err := nomadconf.NomadClient(nomadServer)
 		if err != nil {
 			fmt.Println("Nomad Error:", err)
 			return
@@ -109,7 +109,7 @@ func doVar(cmd *cobra.Command, args []string) {
 			cmd.Help()
 			return
 		}
-		vs := util.NewVarSpec(args[1])
+		vs := nomadconf.NewVarSpec(args[1])
 		if !vs.IsKeyed() {
 			fmt.Println("Error: must create a key when creating a variable.")
 			return
