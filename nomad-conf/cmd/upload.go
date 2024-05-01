@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gerrowadat/nomad-homelab/nomad-conf/util"
+	"github.com/gerrowadat/nomad-homelab/nomad-conf/nomadconf"
 	"github.com/spf13/cobra"
 )
 
@@ -48,7 +48,7 @@ func doUpload(cmd *cobra.Command, args []string) {
 		cmd.Help()
 		return
 	}
-	v := util.NewVarSpec(args[1])
+	v := nomadconf.NewVarSpec(args[1])
 
 	filedata, err := os.ReadFile(args[0])
 	if err != nil {
@@ -57,14 +57,14 @@ func doUpload(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	n, err := util.NomadClient(nomadServer)
+	n, err := nomadconf.NomadClient(nomadServer)
 
 	if err != nil {
 		fmt.Println("Nomad Error:", err)
 		return
 	}
 
-	diff, err := util.GetVariableDiff(n, v, string(filedata))
+	diff, err := nomadconf.GetVariableDiff(n, v, string(filedata))
 
 	if err != nil {
 		fmt.Printf("Error diffing new content: %v\n", err)
@@ -79,7 +79,7 @@ func doUpload(cmd *cobra.Command, args []string) {
 	}
 
 	// At this point, there is a diff, so we upload the new content.
-	err = util.UploadNewVar(n, v, string(filedata))
+	err = nomadconf.UploadNewVar(n, v, string(filedata))
 
 	if err != nil {
 		fmt.Printf("Error uploading new content: %v\n", err)
