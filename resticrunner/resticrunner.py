@@ -163,9 +163,9 @@ class ResticJobRunner(threading.Thread):
                 raise ResticRunnerConfigError(
                     'invalid-looking sftp repo: %s' % (
                         self._cf.repository))
-            sftp_command = 'ssh %s -i %s -s sftp %s' % (repo_parts[1],
-                                                        self._cf.sshkeyfile,
-                                                        self._cf.ssh_extra_args or "")
+            sftp_command = 'ssh %s %s -i %s -s sftp' % (self._cf.ssh_extra_args or ""
+                                                        repo_parts[1],
+                                                        self._cf.sshkeyfile)
             extra_args.extend(['-o',
                                'sftp.command="%s"' % (sftp_command)])
 
