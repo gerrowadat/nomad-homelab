@@ -48,7 +48,8 @@ class ResticJobConfig(object):
                                       'local_dir',
                                       'interval_hrs']
         self._optional_config_keys = ['sshkeyfile',
-                                      'restic_extra_args']
+                                      'restic_extra_args',
+                                      'ssh_extra_args']
 
         self._c = self._get_config_keys()
 
@@ -162,8 +163,9 @@ class ResticJobRunner(threading.Thread):
                 raise ResticRunnerConfigError(
                     'invalid-looking sftp repo: %s' % (
                         self._cf.repository))
-            sftp_command = 'ssh %s -i %s -s sftp' % (repo_parts[1],
-                                                     self._cf.sshkeyfile)
+            sftp_command = 'ssh %s -i %s -s sftp %s' % (repo_parts[1],
+                                                        self._cf.sshkeyfile,
+                                                        self._cf.ssh_extra_args or "")
             extra_args.extend(['-o',
                                'sftp.command="%s"' % (sftp_command)])
 
