@@ -119,3 +119,52 @@ func UploadNewVar(c *api.Client, vs *VarSpec, new_var string) error {
 	_, _, err = c.Variables().Update(v, nil)
 	return err
 }
+
+func ReplaceVar(c *api.Client, from *VarSpec, to *VarSpec, create bool) error {
+	// Replace to with from, creating it if 'create' is set.
+
+	if from.IsKeyed() != to.IsKeyed() {
+		return fmt.Errorf("cannot copy top-level var to/from key")
+	}
+
+	from_var, err := GetVariable(c, from)
+
+	if err != nil {
+		return fmt.Errorf("ReplaceVar: %v not found", from.VarName)
+	}
+
+	// err is populated if variable is not found, and als on an actual error, because <shrug emoji>
+	to_var, _ := GetVariable(c, to)
+
+	will_create := false
+
+	if to_var == nil {
+		if !create {
+			return fmt.Errorf("ReplaceVar: destination %v doesn't exist", to.VarName)
+		}
+		to_var = &api.Variable{Path: to.VarName}
+		will_create = true
+	}
+
+	if from.IsKeyed() {
+		if current, ok := from_var.Items[from.KeyName]; ok {
+			to_var.Items[from.KeyName] = current
+		} else {
+			return fmt.Errorf("%v:%v not found, cannot copy", from.VarName, from.KeyName)
+		}
+	} else {
+		to_var.Items = from_var.Items
+	}
+
+	if will_create {
+		_, _, err = c.Variables().Create(to_var, nil)
+
+	} else {
+		_, _, err = c.Variables().Update(to_var, nil)
+	}
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
