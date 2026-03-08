@@ -5,4 +5,4 @@ Standard disclaimer: these are hacks that are suitable for a homelab, where it's
 the worst thing that'll happen if you get hacked is you lose your plex library or something. Probably don't bet your company
 or employer's compute capability on this, ok? #worksonmycluster
 
-Update March 2026: Repo left for posterity, but I've deprecated all these in favour of eithe rnomad growing that functionality or me no longer using these methods.
+Update March 2026: Repo left for posterity, but I've deprecated all these in favour of either nomad growing that functionality or me no longer using these methods.
